@@ -20,8 +20,10 @@ let s:root = expand('<sfile>:p:h:h')   " plugin/ 的上一级 = 仓库根
 " 本机 (Windows GVim, Vim 9.2) 实测: clipboard=unnamedplus 时 yank 类操作
 " 不会写系统剪贴板, 只有 unnamed 正常, 所以 Windows 侧保持 unnamed。
 " Linux 侧相反: unnamed 指向 X11 primary selection(鼠标选中即是), unnamedplus
-" 才是真正的剪贴板。而 Ubuntu 的 vim 包是 -clipboard 构建, 那里 'clipboard'
-" 选项不存在, 碰它就会抛 E518, 因此必须先探测。
+" 才是真正的剪贴板。
+" 探测必须用 exists('+clipboard'): '+' 形式问的是"功能是否可用"。实测 Ubuntu 24.04
+" 的 vim: exists('&clipboard')=1(选项在)、但 exists('+clipboard')=0 且
+" has('clipboard')=0(拿不到剪贴板), 所以下面这块在服务器上会被正确跳过。
 if exists('+clipboard')
   if has('win32') || has('win64')
     set clipboard=unnamed
@@ -128,10 +130,10 @@ if exists('+undodir')
   set undofile
 endif
 
-if !empty(globpath(&runtimepath, 'autoload/coc/pum.vim'))
-  let g:coc_data_home   = s:root . '/coc'
-  let g:coc_config_home = s:root . '/coc'
-endif
+" 注意: coc 的 g:coc_data_home / g:coc_config_home 不在这里设置, 而是放在 vimrc 里。
+" 原因(实测): pathogen 会把插件目录前插到 runtimepath, 于是 coc 的 plugin/coc.vim 比
+" 本文件先加载、先读走数据目录; 写在这里就晚了 —— 表现为 coc 服务能起但一个扩展都
+" 加载不到。详见 vimrc 末尾的注释。
 
 """""""""""""""""""""""""""""""""""""""
 " 5. Windows 上 :W 是个坑, 就地改成安全的强制写盘

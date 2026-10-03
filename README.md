@@ -23,7 +23,7 @@ my_configs.vim         现有个性化配置 (原样)
 colors/vscode_dark.vim 自写配色, VS Code Dark+ 风格 (原样)
 plugin/zz_platform.vim 平台层 (新增): 剪贴板分支 / OSC52 / F5 Unix 版 / 运行时目录
 autoload/pathogen.vim  插件加载器 (来自 amix/vimrc 分发, MIT)
-pinned.tsv             插件清单: 名称 / 仓库 / 固定 commit / 安装位置
+pinned.tsv             插件清单: 名称 / 仓库 / 固定 commit / 安装位置 / 分支
 coc-extensions.txt     coc 语言服务器扩展清单
 install.sh             安装 (Linux)
 uninstall.sh           卸载 (Linux)
@@ -85,15 +85,20 @@ git clone https://github.com/Morph317/MyVim.git ~/.vim
 
 ### 为什么 bootstrap 用 `silent!` 而不是 `try/catch`
 
-Linux 的 vim 常是 `-clipboard` 构建,那里 `'clipboard'` 选项**不存在**,
-`my_configs.vim` 里的 `set clipboard=...` 会抛 E518。实测:
+实测(而不是猜测):同一个源文件里只要有一处命令报错,
 
 * `try` + `source`:**该文件从出错行起被整体跳过** —— 后面的 `11`/`22`、`Esc Esc`、
   coc 配置全部失效;
 * `silent! source`:报错被吞掉,文件**继续执行到底**。
 
-所以 bootstrap 用 `silent!`。真实错误不会被掩盖:`install.sh --verify` 会做一次严格
-加载检查并列出每个文件的第一处错误(E518 因属预期现象被单独标注为 KNOWN)。
+所以 5 个文件统一用 `silent!` 加载。真实错误不会被长期掩盖:`install.sh --verify`
+会跑**两趟** —— 第一趟逐个文件严格 source 并报出错误,第二趟用真实 `vimrc` 启动
+(插件真正加载)并报告生效的配色、选项与映射。
+
+顺带纠正一个我一开始搞错的事实:Ubuntu 24.04 的 vim 虽然 `--version` 写着
+`-clipboard`,但 `exists('&clipboard')=1`、`set clipboard=...` **不会**报错;
+只是 `exists('+clipboard')=0` / `has('clipboard')=0`,即功能上拿不到系统剪贴板。
+平台层的剪贴板分支用的正是 `exists('+clipboard')`,所以在服务器上会被正确跳过。
 
 ## 剪贴板:只能单向透传
 

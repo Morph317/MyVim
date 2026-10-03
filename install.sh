@@ -33,6 +33,7 @@ usage() {
   --with-coc      额外安装 coc.nvim 的语言服务器扩展 (需要 node/npm)
   --with-tmux     若存在 tmux, 写入 ~/.tmux.conf 让 OSC52 剪贴板能透传
   --update        已存在的插件也执行 fetch + 切回 pinned commit
+  --verify        只做加载检查 (不改动任何东西)
   --no-plugins    只装配置, 不装插件
   --no-link       不创建 ~/.vimrc 软链 (自己管理)
   --no-verify     跳过安装后的加载检查
@@ -50,6 +51,7 @@ while [ $# -gt 0 ]; do
     --with-coc)   DO_COC=1 ;;
     --with-tmux)  DO_TMUX=1 ;;
     --update)     UPDATE=1 ;;
+    --verify)     DO_PLUGINS=0; DO_COC=0; DO_LINK=0; DO_VERIFY=1 ;;
     --no-plugins) DO_PLUGINS=0 ;;
     --no-link)    DO_LINK=0 ;;
     --no-verify)  DO_VERIFY=0 ;;
@@ -243,13 +245,8 @@ for s:f in s:files
     endif
   endtry
 endfor
-let s:plug = 0
-for s:d in ['sources_non_forked', 'my_plugins']
-  let s:plug += len(filter(globpath(s:root . '/' . s:d, '*', 0, 1), 'isdirectory(v:val)'))
-endfor
-call add(s:out, 'PLUGINS ' . s:plug . ' 个插件目录')
-call add(s:out, 'COC     ' . (exists(':CocInstall') ? '已加载' : '未加载'))
-call add(s:out, 'VIM     ' . v:versionlong . '  clipboard=' . has('clipboard'))
+" 注意: 这一趟用 -u NONE 启动, 插件不会被加载, 所以这里只报告 vim 本身
+call add(s:out, 'VIM     ' . v:versionlong . '  has(clipboard)=' . has('clipboard') . '  exists(+clipboard)=' . exists('+clipboard'))
 call writefile(s:out, s:root . '/temp_dirs/install-report.txt')
 qa!
 VIMEOF
@@ -261,13 +258,42 @@ VIMEOF
       while IFS= read -r line; do say "  $line"; done < "$REPORT"
       if grep -q '^ERROR' "$REPORT"; then
         say "  !! 有加载错误, 请把上面内容发给我"
-      else
-        say "  (KNOWN 是 -clipboard 构建的预期现象, 不影响功能)"
       fi
     else
       say "  !! 验证没产出报告, 请手工跑一次 vim 看报错"
     fi
-    rm -f "$CHECKER"
+
+    # ---- 第二趟: 用真实 vimrc 启动 (插件会加载), 报告实际生效的配置 ----
+    STATE="$ROOT/temp_dirs/.install-state.vim"
+    REPORT2="$ROOT/temp_dirs/install-state.txt"
+    cat > "$STATE" <<'VIMEOF'
+let s:out = []
+let s:rtp = &runtimepath
+let s:dirs = 0
+for s:d in ['sources_non_forked', 'my_plugins']
+  for s:p in globpath($MYVIM_ROOT . '/' . s:d, '*', 0, 1)
+    if isdirectory(s:p) && stridx(s:rtp, s:p) >= 0
+      let s:dirs += 1
+    endif
+  endfor
+endfor
+call add(s:out, '插件已加载 ' . s:dirs . ' 个')
+if exists(':CocInstall')
+  call add(s:out, 'coc.nvim 已加载, build/index.js ' . (filereadable($MYVIM_ROOT . '/my_plugins/coc.nvim/build/index.js') ? '存在' : '缺失(无法启动!)'))
+else
+  call add(s:out, 'coc.nvim 未加载')
+endif
+call add(s:out, '生效: colorscheme=' . get(g:, 'colors_name', '?') . ' number=' . &number . ' shiftwidth=' . &shiftwidth . ' leader=[' . get(g:, 'mapleader', '?') . ']')
+call add(s:out, '映射: 11=' . maparg('11', 'n') . ' | 22=' . maparg('22', 'n') . ' | EscEsc=' . (empty(maparg('<Esc><Esc>', 'n')) ? '缺失!' : 'ok') . ' | Space_y=' . (empty(maparg('<Space>y', 'n')) ? '(未注册)' : 'ok(OSC52)'))
+call add(s:out, '剪贴板: ' . (exists('+clipboard') ? '功能可用' : '功能不可用 -> 走 OSC52'))
+call writefile(s:out, $MYVIM_ROOT . '/temp_dirs/install-state.txt')
+qa!
+VIMEOF
+    MYVIM_ROOT="$ROOT" vim -i NONE -u "$ROOT/vimrc" -es -S "$STATE" >/dev/null 2>&1 || true
+    if [ -f "$REPORT2" ]; then
+      while IFS= read -r line; do say "  $line"; done < "$REPORT2"
+    fi
+    rm -f "$CHECKER" "$STATE"
   fi
 else
   say "  --no-verify, 跳过"
