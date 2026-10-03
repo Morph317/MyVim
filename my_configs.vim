@@ -102,10 +102,14 @@ function! s:SaveFile() abort
   silent! update
 endfunction
 
-" 注意: 为了让 Esc 只在"真的想连击"时才等待, 把 timeoutlen 由默认 1000ms 调短。
-"       副作用: 空格开头的组合键 (空格+w 等) 和 11/22 也要在 300ms 内按完。
-"       觉得太快就把下面的 300 改成 500 或 700。
-set timeoutlen=300
+" 注意: timeoutlen 决定"一个键按下去后还能等多久, 去凑成一个多键映射"。
+"   太短: 多键映射会散架 —— 实测 300ms 时, "11"(行首)只要两个 1 相隔超过 300ms,
+"         就会被当成"计数 11", 于是 11j 变成向下 11 行 (服务器上走 SSH 时必踩)。
+"   太长: 按了空格 leader 之后停顿过久, 空格会被当成普通空格 (右移一格)。
+"   700ms 是折中: 实测 0.5 秒/键的慢节奏下 11/22 仍然有效, leader 与连击 Esc 手感尚可。
+"   参考: 插入模式按 Esc 的延迟与 timeoutlen 无关 (300/1000 实测均为 1ms),
+"         所以调大它不会让"连击 Esc 保存"变卡。
+set timeoutlen=700
 nnoremap <silent> <Esc><Esc> :<C-u>call <SID>SaveFile()<CR>
 inoremap <silent> <Esc><Esc> <Esc>:<C-u>call <SID>SaveFile()<CR>
 vnoremap <silent> <Esc><Esc> <Esc>:<C-u>call <SID>SaveFile()<CR>
