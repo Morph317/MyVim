@@ -127,6 +127,7 @@ if [ "$DO_PLUGINS" = 1 ]; then
       say "  安装 $name @ ${sha:0:8}"
       if [ "$DRY" = 1 ]; then
         say "  [dry-run] git clone $url $target && git checkout $sha"
+        count_ok=$((count_ok+1))
         continue
       fi
       if git clone --quiet "$url" "$target" 2>/dev/null && git -C "$target" checkout --quiet "$sha" 2>/dev/null; then
@@ -146,7 +147,7 @@ fi
 # ---------------------------------------------------------------- 3. coc
 step "3. coc.nvim (可选)"
 if [ "$DO_COC" = 1 ]; then
-  if [ ! -d "$ROOT/my_plugins/coc.nvim" ]; then
+  if [ ! -d "$ROOT/my_plugins/coc.nvim" ] && [ "$DRY" = 0 ]; then
     say "  !! coc.nvim 本体没装上 (见上一步), 跳过"
   elif ! command -v node >/dev/null 2>&1; then
     say "  !! 没有 node, 跳过。Ubuntu 上可: sudo apt install nodejs npm"

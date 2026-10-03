@@ -26,7 +26,8 @@ autoload/pathogen.vim  插件加载器 (来自 amix/vimrc 分发, MIT)
 pinned.tsv             插件清单: 名称 / 仓库 / 固定 commit / 安装位置
 coc-extensions.txt     coc 语言服务器扩展清单
 install.sh             安装 (Linux)
-uninstall.sh           卸载
+uninstall.sh           卸载 (Linux)
+install.ps1            Windows 侧可选脚本 (默认不做任何修改)
 sources_non_forked/    插件 (克隆得到, 已 gitignore; peaksea 与 vim-irblack-forked 除外)
 my_plugins/            coc.nvim 本体 (克隆得到, 已 gitignore)
 coc/                   coc 运行数据与扩展, 约 100MB (已 gitignore)
@@ -53,8 +54,23 @@ git clone https://github.com/Morph317/MyVim.git ~/.vim
 只需用仓库里的 `vimrc` 启动:
 
 ```powershell
+# 只检查 + 打印用法, 什么都不改
+.\install.ps1
+
+# 临时用仓库版本启动 gvim
 & 'C:\Program Files\Vim\vim92\gvim.exe' -u 'C:\Users\14314\source\repos\MyVim\vimrc'
+
+# 把插件也克隆进仓库 (之后仓库版就是完整的)
+.\install.ps1 -InstallPlugins
+
+# 让 Windows 正式改用仓库版本: 自动备份然后再建立
+#   ~/_vimrc       -> 仓库 vimrc            (硬链接, 不需要管理员)
+#   ~/.vim_runtime -> 仓库目录              (目录联接, 不需要管理员)
+.\install.ps1 -InstallPlugins -TakeOver
 ```
+
+`-TakeOver` 会先把你现有的 `~/_vimrc` 与 `~/.vim_runtime` 改名成 `.bak-<时间戳>`,
+想回退把它们改回来即可。
 
 ## 跨平台差异都在平台层
 
