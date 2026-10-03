@@ -1,0 +1,25 @@
+# MyVim 插件清单 —— install.sh 的唯一数据来源
+# 列: 名称<TAB>仓库<TAB>固定 commit<TAB>安装到哪个目录
+# 说明: 现有部署里的插件目录是"去掉了 .git 的普通拷贝", 上游版本不可考,
+#       因此这里的 commit 统一取"生成本文件时的上游 HEAD", 作为可复现的基线。
+
+auto-pairs	https://github.com/jiangmiao/auto-pairs	39f06b873a8449af8ff6a3eee716d3da14d63a76	sources_non_forked
+bufexplorer	https://github.com/jlanzarotta/bufexplorer	8b8a974fe0e1870b050fe623a34fbdbaa4006ccc	sources_non_forked
+ctrlp.vim	https://github.com/ctrlpvim/ctrlp.vim	0065942ef13ce28293e2b26cb622d035da050b44	sources_non_forked
+dracula	https://github.com/dracula/vim	e7817b4baccfb3529f709ac048c621f35cdbc5b3	sources_non_forked
+gruvbox	https://github.com/morhetz/gruvbox	ef8864bb42bf244f0295d1c5a403b27e3d139695	sources_non_forked
+lightline.vim	https://github.com/itchyny/lightline.vim	d042c506cb2e7a59112a72447e0b5fe8739d9d1d	sources_non_forked
+mayansmoke	https://github.com/vim-scripts/mayansmoke	168883af7aec05f139af251f47eadd5dfb802c9d	sources_non_forked
+mru.vim	https://github.com/vim-scripts/mru.vim	9f25db66393a6467fae0ac04ae6565e8471023c3	sources_non_forked
+nerdtree	https://github.com/preservim/nerdtree	690d061b591525890f1471c6675bcb5bdc8cdff9	sources_non_forked
+vim-colors-solarized	https://github.com/altercation/vim-colors-solarized	528a59f26d12278698bb946f8fb82a63711eec21	sources_non_forked
+vim-commentary	https://github.com/tpope/vim-commentary	64a654ef4a20db1727938338310209b6a63f60c9	sources_non_forked
+vim-expand-region	https://github.com/terryma/vim-expand-region	966513543de0ddc2d673b5528a056269e7917276	sources_non_forked
+vim-fugitive	https://github.com/tpope/vim-fugitive	3b753cf8c6a4dcde6edee8827d464ba9b8c4a6f0	sources_non_forked
+vim-gitgutter	https://github.com/airblade/vim-gitgutter	90b75207bd9b55d8ac4af15f72b4e935462014d0	sources_non_forked
+vim-pyte	https://github.com/therubymug/vim-pyte	2fb9ada33c94f9c4dff7db8d214b3123666acb1e	sources_non_forked
+vim-repeat	https://github.com/tpope/vim-repeat	65846025c15494983dafe5e3b46c8f88ab2e9635	sources_non_forked
+vim-rhubarb	https://github.com/tpope/vim-rhubarb	5496d7c94581c4c9ad7430357449bb57fc59f501	sources_non_forked
+vim-surround	https://github.com/tpope/vim-surround	3d188ed2113431cf8dac77be61b842acb64433d9	sources_non_forked
+vim-yankstack	https://github.com/maxbrunsfeld/vim-yankstack	157a659c1b101c899935d961774fb5c8f0775370	sources_non_forked
+coc.nvim	https://github.com/neoclide/coc.nvim	0c368b924be3f86d9074fbe5b5eeaaf8b3acac31	my_plugins

@@ -1,0 +1,30 @@
+# ============================================================
+# 装出来的东西一律不入库 (由 install.sh 按 pinned.tsv 克隆)
+# ============================================================
+/sources_non_forked/*
+!/sources_non_forked/.gitkeep
+# 这两个配色不在 amix 的上游插件清单里 (是它仓库内自带的 fork), 没有独立 URL,
+# 所以只能随仓库入库 (共 3 个文件, 极小)
+!/sources_non_forked/peaksea/
+!/sources_non_forked/vim-irblack-forked/
+/my_plugins/*
+!/my_plugins/.gitkeep
+
+# coc 运行时数据: 扩展的 node_modules 有约 100MB, 且是可再生的
+/coc/
+
+# ============================================================
+# 运行时产物
+# ============================================================
+/temp_dirs/undodir/*
+!/temp_dirs/undodir/.gitkeep
+/temp_dirs/yankring_history_v2.txt
+tags
+.netrwhist
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 安装脚本留下的本地覆盖配置
+/local.conf

@@ -1,0 +1,16 @@
+# coc.nvim 语言服务器扩展清单 (install.sh --with-coc 会按此安装)
+#
+# 每行一个 npm 包名, # 开头为注释。
+# 这些扩展装在 <仓库>/coc/extensions/ 下 (.gitignore 已排除, 可再生)。
+# 增减后重跑: ./install.sh --with-coc
+#
+# 语言服务器都是"按需启动"的: 只有你打开对应类型的文件时才会拉起进程,
+# 所以在 2C2G 的小机器上装全套也不会常驻占内存。
+
+coc-clangd        # C / C++   (使用系统里已装的 clangd)
+coc-pyright       # Python    (自带 pyright, 需要 node)
+coc-tsserver      # JS / TS
+coc-json          # JSON
+coc-html          # HTML
+coc-css           # CSS
+coc-sh            # Shell (自带 bash-language-server)

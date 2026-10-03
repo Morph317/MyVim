@@ -1,0 +1,17 @@
+# 仓库内与检出时统一使用 LF。
+# 原因: 现有 basic.vim / extended.vim / plugins_config.vim / filetypes.vim 都是
+# CRLF (Windows 编辑所致), 而目标机器是 Linux。CRLF 的 vimrc 在 Unix 上可能把
+# 尾随的 \r 带进映射/字符串, shell 脚本更是直接报 $'\r': command not found。
+# 用 git 在"提交/检出"层面归一化, 工作区文件内容本身不动。
+* text=auto eol=lf
+
+# 二进制文件不做文本处理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.gz binary
