@@ -106,9 +106,11 @@ if [ "$DO_PLUGINS" = 1 ]; then
     say "  !! 没有 git, 跳过插件安装"
   else
     count_ok=0; count_skip=0; count_fail=0
-    while IFS=$'\t' read -r name url sha dest; do
+    while IFS=$'\t' read -r name url sha dest ref; do
       case "$name" in ''|\#*) continue ;; esac
       [ -n "${dest:-}" ] || continue
+      # 第 5 列是分支名 (留空 = 用远端默认分支); 顺手去掉可能的 CR 与空白
+      ref="$(printf '%s' "${ref:-}" | tr -d '[:space:]')"
       target="$ROOT/$dest/$name"
       if [ -d "$target/.git" ]; then
         if [ "$UPDATE" = 1 ]; then
@@ -125,13 +127,19 @@ if [ "$DO_PLUGINS" = 1 ]; then
         count_fail=$((count_fail+1)); continue
       fi
       say "  安装 $name @ ${sha:0:8}"
+      clone_args=()
+      [ -n "$ref" ] && clone_args=(--branch "$ref")
       if [ "$DRY" = 1 ]; then
-        say "  [dry-run] git clone $url $target && git checkout $sha"
+        say "  [dry-run] git clone ${clone_args[*]} $url $target && git checkout $sha"
         count_ok=$((count_ok+1))
         continue
       fi
-      if git clone --quiet "$url" "$target" 2>/dev/null && git -C "$target" checkout --quiet "$sha" 2>/dev/null; then
+      if git clone --quiet ${clone_args[@]+"${clone_args[@]}"} "$url" "$target" 2>/dev/null && git -C "$target" checkout --quiet "$sha" 2>/dev/null; then
         count_ok=$((count_ok+1))
+        # coc.nvim 只有 release 分支带编译产物; 走错分支会得到一个无法启动的 coc
+        if [ "$name" = "coc.nvim" ] && [ ! -f "$target/build/index.js" ]; then
+          say "  !! coc.nvim 里没有 build/index.js: pin 到的提交不在 release 分支上"
+        fi
       else
         say "  !! $name 安装失败 (网络? commit 不存在?)"
         count_fail=$((count_fail+1))
