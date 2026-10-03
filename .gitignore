@@ -19,6 +19,8 @@
 /temp_dirs/undodir/*
 !/temp_dirs/undodir/.gitkeep
 /temp_dirs/yankring_history_v2.txt
+# install.sh 生成的检查报告 (每次 --verify 都会重写)
+/temp_dirs/install-*.txt
 tags
 .netrwhist
 *.swp

@@ -136,7 +136,22 @@ if [ "$DO_PLUGINS" = 1 ]; then
         count_ok=$((count_ok+1))
         continue
       fi
-      if git clone --quiet ${clone_args[@]+"${clone_args[@]}"} "$url" "$target" 2>/dev/null && git -C "$target" checkout --quiet "$sha" 2>/dev/null; then
+      clone_ok=0
+      if git clone --quiet ${clone_args[@]+"${clone_args[@]}"} "$url" "$target" 2>/dev/null; then
+        clone_ok=1
+      else
+        # 实测: 某些网络里到 github.com 的 HTTPS 会被重置/超时, 而 SSH(22) 仍然可用
+        # (本项目的服务器就是这种: curl https://github.com 超时, ssh -T git@github.com 正常)。
+        # 所以 HTTPS 失败时把 URL 换成 SSH 形式再试一次 —— 前提是这台机器有已登记到
+        # GitHub 的密钥 (账号级 key 可以拉公共库; 只读部署密钥只能拉它所属的那一个仓库)。
+        url_ssh="$(printf '%s' "$url" | sed -e 's#^https://github.com/#git@github.com:#')"
+        if [ "$url_ssh" != "$url" ]; then
+          say "  HTTPS 克隆失败, 改用 SSH 重试"
+          rm -rf "$target"
+          git clone --quiet ${clone_args[@]+"${clone_args[@]}"} "$url_ssh" "$target" 2>/dev/null && clone_ok=1
+        fi
+      fi
+      if [ "$clone_ok" = 1 ] && git -C "$target" checkout --quiet "$sha" 2>/dev/null; then
         count_ok=$((count_ok+1))
         # coc.nvim 只有 release 分支带编译产物; 走错分支会得到一个无法启动的 coc
         if [ "$name" = "coc.nvim" ] && [ ! -f "$target/build/index.js" ]; then
