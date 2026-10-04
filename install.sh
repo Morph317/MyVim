@@ -308,7 +308,32 @@ VIMEOF
     if [ -f "$REPORT2" ]; then
       while IFS= read -r line; do say "  $line"; done < "$REPORT2"
     fi
-    rm -f "$CHECKER" "$STATE"
+
+    # ---- 第三趟: 裸 vim (不带 -u), 走真实入口 ~/.vimrc ----
+    # 这一趟是补漏洞的关键: 前两趟都显式 -u <仓库>/vimrc, 恰好绕开了
+    # "~/.vimrc 是指向仓库的软链"这条真实路径。一旦 bootstrap 把仓库根算错,
+    # silent! 会把所有 source 的失败吞掉, 配置等于零却依然"验证通过" —— 实测踩过。
+    ENTRY="$ROOT/temp_dirs/.install-entry.vim"
+    REPORT3="$ROOT/temp_dirs/install-entry.txt"
+    cat > "$ENTRY" <<'VIMEOF'
+let s:out = []
+call add(s:out, 'MYVIMRC=' . (empty($MYVIMRC) ? '(空! 没有加载任何 vimrc)' : $MYVIMRC))
+call add(s:out, '生效: timeoutlen=' . &timeoutlen . '  colors_name=' . get(g:, 'colors_name', '?') . '  number=' . &number)
+call add(s:out, '映射: 11=[' . maparg('11', 'n') . ']  22=[' . maparg('22', 'n') . ']  EscEsc=' . (empty(maparg('<Esc><Esc>', 'n')) ? '缺失!' : 'ok'))
+call add(s:out, 'coc: ' . (exists(':CocInstall') ? '已加载' : '未加载'))
+call writefile(s:out, $MYVIM_ENTRY_REPORT)
+qa!
+VIMEOF
+    MYVIM_ENTRY_REPORT="$REPORT3" vim -i NONE --not-a-term -S "$ENTRY" >/dev/null 2>&1 || true
+    if [ -f "$REPORT3" ]; then
+      while IFS= read -r line; do say "  $line"; done < "$REPORT3"
+      if ! grep -q '映射: 11=\[0\]' "$REPORT3"; then
+        say "  !! 裸 vim 入口下配置没生效(11 映射缺失): 检查 ~/.vimrc 软链与 vimrc 里的仓库根推导"
+      fi
+    else
+      say "  !! 第三趟没产出报告 (裸 vim --not-a-term 启动失败?)"
+    fi
+    rm -f "$CHECKER" "$STATE" "$ENTRY"
   fi
 else
   say "  --no-verify, 跳过"

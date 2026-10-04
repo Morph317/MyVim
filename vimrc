@@ -10,7 +10,36 @@
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 set nocompatible
 
-let s:root = expand('<sfile>:p:h')
+" —— 定位仓库根 ——
+"
+" 这里踩过一个真实的坑(服务器上的表现是"配置完全没生效"):
+"   安装方式是把 ~/.vimrc 软链到 <仓库>/vimrc, 而 Vim 的 <sfile>:p **不解析软链** ——
+"   从 ~/.vimrc 进入时 <sfile> 就是 /root/.vimrc, 推出的"仓库根"成了 /root,
+"   于是下面五行 source 全部指向不存在的 /root/vimrcs/*.vim, 又被 silent! 吞掉。
+"   结果: coc 不加载、11/22 等映射全部丢失、timeoutlen 还是默认值 —— 而所有
+"   "显式 -u <仓库>/vimrc" 的测试都恰好绕开了软链, 因此一路绿灯。
+"   教训: 验收必须走真实入口(裸 vim, 不带 -u), 见 install.sh 的第三趟检查。
+"
+" 修法: 先 resolve() 解软链, 再加候选目录(覆盖 Windows 上 _vimrc 硬链接/目录联接的情况),
+"       逐个验证 vimrcs/basic.vim 是否存在; 都不中时明确报警, 绝不静默变哑巴。
+let s:cands = []
+call add(s:cands, fnamemodify(resolve(expand('<sfile>:p')), ':h'))
+call add(s:cands, fnamemodify(expand('<sfile>:p'), ':h'))
+call add(s:cands, expand('~/.vim'))
+call add(s:cands, expand('~/.vim_runtime'))
+let s:root = ''
+for s:c in s:cands
+  if filereadable(s:c . '/vimrcs/basic.vim')
+    let s:root = s:c
+    break
+  endif
+endfor
+if empty(s:root)
+  let s:root = fnamemodify(resolve(expand('<sfile>:p')), ':h')
+  echohl WarningMsg
+  echomsg 'MyVim: 找不到配置仓库(缺少 vimrcs/basic.vim), 已尝试: ' . join(s:cands, ', ')
+  echohl None
+endif
 
 " 把仓库根加入 runtimepath。
 " Windows 上 vim 默认不看 ~/.vim, 必须显式加;
