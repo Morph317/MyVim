@@ -110,6 +110,32 @@ git clone https://github.com/Morph317/MyVim.git ~/.vim
   `Ctrl+Shift+V`)。
 * **在 tmux 里**:需要 `set -g set-clipboard on`(用 `install.sh --with-tmux` 写入)。
 
+## 终端光标:做成 gvim 那样的方块
+
+终端里的 Vim 默认**不会**按 `guicursor` 去改光标形状 —— 实测(真实 pty,`TERM` 分别取
+`xterm-256color` / `screen-256color` / `tmux-256color`)Ubuntu Vim 9.1 和 Windows
+Vim 9.2 的 `t_SI` / `t_SR` / `t_EI` 全是空字符串,于是终端一直用它自己的默认形状
+(Windows Terminal 的默认光标就是一根细竖条),看起来自然和 gvim 不一样。
+
+所以 `my_configs.vim` 里显式写入 xterm 的 **DECSCUSR** 序列,形状与 gvim 的默认
+`guicursor` 完全一致:
+
+| 模式 | 序列 | 形状 |
+|---|---|---|
+| 普通 / 可视 | `\e[2 q` | 实心方块 |
+| 插入 | `\e[6 q` | 竖条 |
+| 替换 | `\e[4 q` | 下划线 |
+
+另外给 `t_ti` / `t_te` 各追加一次:启动就摆成方块(不必先切一次模式),退出 vim 时把
+终端原本的形状还原。gvim 不受影响 —— 它本来就是方块。
+
+* 想**全程方块**(插入模式也要方块):`let g:myvim_always_block_cursor = 1`
+* 想**关掉**这段(例如终端不支持该序列):`let g:myvim_cursor_shape = 0`
+
+实测验证:在服务器真实入口(`~/.vimrc` 软链 → 仓库)的 pty 里捕获到了完整序列
+`[2 q`(启动)→ `[6 q`(进插入)→ `[2 q`(回普通)→ `[0 q`(退出);tmux 3.4 会把该序列
+透传给外层终端(捕获 ssh pty 实测),所以在 tmux 里同样有效。
+
 ## coc.nvim (可选)
 
 ```bash
@@ -119,9 +145,11 @@ git clone https://github.com/Morph317/MyVim.git ~/.vim
 扩展装在 `<仓库>/coc/extensions`,语言服务器**按需启动**,只有打开对应文件才拉起进程。
 启动后用 `:CocInfo` 看状态、`:CocList diagnostics` 看诊断、`空格+dd` 看全部诊断。
 
-> ⚠️ 已知问题:目前在 Windows 上 coc 本体能起,但语言服务器没有被拉起
-> (`pyright-langserver` 进程不存在、诊断符号为 0),这个问题**尚在排查**,未解决。
-> `install.sh --verify` 只检查插件是否加载,不会替你确认语言服务器是否在跑。
+> 说明:出现过"coc 本体起来了,但语言服务器没被拉起"的情况,根因是 npm 把 `pyright`
+> 提升到了顶层,`coc-pyright` 目录里找不到 `langserver.index.js`。安装时加
+> `--install-strategy=nested` 即可规避(两端的 `coc-pyright` 现在都已确认该文件存在)。
+> 若仍无补全,用 `:CocInfo` / `:CocList extensions` 看扩展是否加载;另外 pyright 首次
+> 索引要几十秒(2C2G 服务器实测约 26 秒),属正常现象。
 
 ## 快捷键速查
 
@@ -133,7 +161,8 @@ git clone https://github.com/Morph317/MyVim.git ~/.vim
 | `空格+j` / `空格+b` / `空格+nn` / `空格+o` / `空格+f` | CtrlP 找文件 / 找缓冲 / NERDTree / 缓冲列表 / 最近文件 |
 | `11` / `22` | 行首(第 1 列) / 行尾;`d11`、`y22` 等操作符模式同样可用 |
 | `Esc Esc` | 保存(插入模式里连按两下) |
-| `Esc` 两下之间的等待由 `timeoutlen=300` 决定 | 嫌快改成 500 |
+| `Esc` 两下之间的等待由 `timeoutlen=700` 决定 | 慢手速下 `11`/`22` 会被当成计数,`700` 是实测折中 |
+| 终端光标 | 普通/可视=实心方块,插入=竖条(同 gvim);`g:myvim_always_block_cursor=1` 改全程方块 |
 | `F5` | 编译/运行当前文件 |
 | `gc` / `gcc` | 注释 (commentary) |
 | `ys` / `cs` / `ds` | 环绕编辑 (surround) |
