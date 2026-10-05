@@ -68,6 +68,39 @@ endif
 "   Windows 上 "*" 与 "+" 指向同一个系统剪贴板, 功能上完全等价。
 set clipboard=unnamed
 
+" === 终端光标形状: 做成 gvim 那样的方块 ===
+" 症状: 在终端里跑 vim (例如 Windows Terminal 里 SSH 上服务器), 普通模式的光标
+"       是一根细竖条, 和 gvim 的实心方块不一样。
+" 原因(实测, 2025):
+"   Vim 并不会按 'guicursor' 自动给终端发送光标形状 ——
+"   本机 Windows Vim 9.2 与服务器 Ubuntu Vim 9.1 的 t_SI / t_SR / t_EI
+"   全都是空字符串(在真实 pty 里用 TERM=xterm-256color / screen-256color 均如此),
+"   于是终端一直用它自己的默认形状: Windows Terminal 的默认光标就是竖条。
+" 办法: 用 xterm 的 DECSCUSR 转义序列显式指定各模式的形状, 与 gvim 的默认完全一致:
+"       普通/可视 = 实心方块    插入 = 竖条    替换 = 下划线
+" 只在终端里生效 (gvim 本来就是方块, 不碰它); 退出 vim 会把终端原本的形状还原。
+" tmux 3.x 会把该序列透传给它外面的终端(已在服务器 tmux 3.4 上实测捕获到), 所以
+" 在 tmux 里同样有效。
+" 想全程都是方块(插入模式也要方块): 在 vimrc 里加一行
+"   let g:myvim_always_block_cursor = 1
+" 想彻底关掉这一段: 在 vimrc 里加一行
+"   let g:myvim_cursor_shape = 0
+if get(g:, 'myvim_cursor_shape', 1) && exists('&t_SI') && !has('gui_running')
+      \ && &term =~# 'xterm\|screen\|tmux\|rxvt\|st-\|alacritty\|foot\|win32\|cygwin\|msys'
+  let s:cur_block = "\e[2 q"   " 稳定方块
+  let s:cur_bar   = "\e[6 q"   " 稳定竖条
+  let s:cur_line  = "\e[4 q"   " 稳定下划线
+  if get(g:, 'myvim_always_block_cursor', 0)
+    let s:cur_bar  = s:cur_block
+    let s:cur_line = s:cur_block
+  endif
+  let &t_EI = s:cur_block      " 普通/可视模式
+  let &t_SI = s:cur_bar        " 插入模式
+  let &t_SR = s:cur_line       " 替换模式
+  let &t_ti ..= s:cur_block    " 启动就摆成方块, 不必先切一次模式
+  let &t_te ..= "\e[0 q"       " 退出 vim 时还原终端原本的形状
+endif
+
 " === Windows 便利 ===
 set showtabline=2                " 总是显示标签栏
 
