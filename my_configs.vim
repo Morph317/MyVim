@@ -124,16 +124,56 @@ nnoremap 22 $
 xnoremap 22 $
 onoremap 22 $
 
-" === 连击两下 Esc 保存文件 ===
-" 用法: 插入模式里连按两下 Esc (第一下退出插入模式, 第二下保存)。
-"   只有当文件确实被修改过才写入, 不会每次都刷磁盘。
-"   无名缓冲 (如 NERDTree 列表) 或只读缓冲会自动跳过, 不报错。
-function! s:SaveFile() abort
-  if &buftype !=# '' || !&modifiable || expand('%') ==# ''
+" === 连击两下 Esc 保存文件 (等价于 :w) ===
+" 用法: 插入模式里连按两下 Esc —— 第一下退出插入模式, 第二下写盘;
+"       普通模式 / 可视模式里连按两下 Esc 同样有效; 只按一下不会写。
+"   没有改动、无名缓冲 (如 NERDTree 列表)、只读缓冲会自动跳过, 不报错。
+"
+" 【为什么不能写成 inoremap <Esc><Esc> —— 实测踩过的坑, 2025】
+"   终端里方向键发过来的是 ESC 开头的序列 (\eOA / \e[A)。先按 Esc 退出插入模式,
+"   紧接着按方向键, 字节流就是  \e + \eOA  —— 头两个字节恰好凑成 <Esc><Esc>,
+"   于是 Vim 把"退出插入模式 + 方向键"错当成"连击两下 Esc": 文件被静默写盘(误触!),
+"   剩下的 OA 继续在普通模式里执行 —— O 在当前行上方开一行、A 进入插入模式并插入字母 A。
+"   四个方向键分别对应 A/B/C/D, 这就是"Esc 加方向键会蹦出 ABCD"的真正原因。
+"   实测复现(服务器, 真实入口): iXYZ [Esc] [Up] → 缓冲区多出一行 "A",
+"   而且文件在完全没执行 :w 的情况下被写到了磁盘上。
+" 【现在的做法】
+"   插入模式不再占用 Esc(退出插入模式零延迟、也不参与映射);
+"   普通模式的 Esc 交给一个 0.7 秒的连击判定: "刚退出插入模式/可视模式" 或
+"   "刚按过一下 Esc" 都会把下一次 Esc 当成第二下来写盘。
+"   方向键是完整的终端序列, 会被正常识别成 <Up> 等按键, 不再和映射撞车。
+let s:esc_window   = 0.7        " 两下 Esc 的最大间隔(秒), 与下面 timeoutlen=700 对齐
+let s:esc_armed_at = []         " 刚退出插入/可视模式的时间 (reltime)
+let s:esc_last_at  = []         " 普通模式里上一次按 Esc 的时间
+
+function! s:EscWrite() abort
+  if &buftype !=# '' || !&modifiable || expand('%') ==# '' || !&modified
     return
   endif
-  silent! update
+  silent! write
 endfunction
+
+function! s:EscArm() abort
+  let s:esc_armed_at = reltime()
+endfunction
+
+function! s:EscSave() abort
+  if !empty(s:esc_armed_at) && reltimefloat(reltime(s:esc_armed_at)) < s:esc_window
+    let s:esc_armed_at = []
+    let s:esc_last_at = []
+    call s:EscWrite()
+  elseif !empty(s:esc_last_at) && reltimefloat(reltime(s:esc_last_at)) < s:esc_window
+    let s:esc_last_at = []
+    call s:EscWrite()
+  else
+    let s:esc_last_at = reltime()
+  endif
+endfunction
+
+augroup MyEscSave
+  autocmd!
+  autocmd InsertLeave * call s:EscArm()
+augroup END
 
 " 注意: timeoutlen 决定"一个键按下去后还能等多久, 去凑成一个多键映射"。
 "   太短: 多键映射会散架 —— 实测 300ms 时, "11"(行首)只要两个 1 相隔超过 300ms,
@@ -143,9 +183,8 @@ endfunction
 "   参考: 插入模式按 Esc 的延迟与 timeoutlen 无关 (300/1000 实测均为 1ms),
 "         所以调大它不会让"连击 Esc 保存"变卡。
 set timeoutlen=700
-nnoremap <silent> <Esc><Esc> :<C-u>call <SID>SaveFile()<CR>
-inoremap <silent> <Esc><Esc> <Esc>:<C-u>call <SID>SaveFile()<CR>
-vnoremap <silent> <Esc><Esc> <Esc>:<C-u>call <SID>SaveFile()<CR>
+nnoremap <silent> <Esc> :<C-u>call <SID>EscSave()<CR>
+vnoremap <silent> <Esc> <Esc>:<C-u>call <SID>EscArm()<CR>
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " => coc.nvim (LSP: 智能补全 / 实时诊断 / 跳转 / 重命名)
@@ -211,7 +250,7 @@ endif
 "   ys/cs/ds  环绕编辑 (surround)
 "   v         扩展选区，连续按 v 扩大 (expand-region)
 "   F5        编译运行当前文件 (C/C++/Java/Python/Shell/HTML/Go)
-" 编辑:     Esc Esc 连击两下 = 保存 (插入模式里连按两下即可)
+" 编辑:     连按两下 Esc = 保存 (:w), 插入/普通/可视模式都行; 单按一下不会写
 " 跳转:     11 行首 (第1列) | 22 行尾 | 0 首个非空白字符 | $ 行尾
 "           带操作符也能用: d11 删到行首, y22 复制到行尾
 " 其他:     ,m 去行尾空格 | 空格+pp 粘贴模式

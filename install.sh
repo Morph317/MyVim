@@ -299,7 +299,7 @@ else
   call add(s:out, 'coc.nvim 未加载')
 endif
 call add(s:out, '生效: colorscheme=' . get(g:, 'colors_name', '?') . ' number=' . &number . ' shiftwidth=' . &shiftwidth . ' leader=[' . get(g:, 'mapleader', '?') . ']')
-call add(s:out, '映射: 11=' . maparg('11', 'n') . ' | 22=' . maparg('22', 'n') . ' | EscEsc=' . (empty(maparg('<Esc><Esc>', 'n')) ? '缺失!' : 'ok') . ' | Space_y=' . (empty(maparg('<Space>y', 'n')) ? '(未注册)' : 'ok(OSC52)'))
+call add(s:out, '映射: 11=' . maparg('11', 'n') . ' | 22=' . maparg('22', 'n') . ' | Esc保存=' . (!empty(maparg('<Esc>', 'n')) && empty(maparg('<Esc><Esc>', 'n')) ? 'ok(连击判定)' : '缺失!') . ' | Space_y=' . (empty(maparg('<Space>y', 'n')) ? '(未注册)' : 'ok(OSC52)'))
 call add(s:out, '剪贴板: ' . (exists('+clipboard') ? '功能可用' : '功能不可用 -> 走 OSC52'))
 call writefile(s:out, $MYVIM_ROOT . '/temp_dirs/install-state.txt')
 qa!
@@ -319,7 +319,7 @@ VIMEOF
 let s:out = []
 call add(s:out, 'MYVIMRC=' . (empty($MYVIMRC) ? '(空! 没有加载任何 vimrc)' : $MYVIMRC))
 call add(s:out, '生效: timeoutlen=' . &timeoutlen . '  colors_name=' . get(g:, 'colors_name', '?') . '  number=' . &number)
-call add(s:out, '映射: 11=[' . maparg('11', 'n') . ']  22=[' . maparg('22', 'n') . ']  EscEsc=' . (empty(maparg('<Esc><Esc>', 'n')) ? '缺失!' : 'ok'))
+call add(s:out, '映射: 11=[' . maparg('11', 'n') . ']  22=[' . maparg('22', 'n') . ']  Esc保存=' . (!empty(maparg('<Esc>', 'n')) && empty(maparg('<Esc><Esc>', 'n')) ? 'ok(连击判定)' : '缺失!'))
 call add(s:out, 'coc: ' . (exists(':CocInstall') ? '已加载' : '未加载'))
 call writefile(s:out, $MYVIM_ENTRY_REPORT)
 qa!
