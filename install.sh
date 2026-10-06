@@ -4,6 +4,8 @@
 #
 #   Linux 服务器:  git clone <repo> ~/.vim && ~/.vim/install.sh
 #   带 coc:        ~/.vim/install.sh --with-coc
+#   小内存机器:    ~/.vim/install.sh --with-coc --with-pyrefly
+#   换回 pyright:  ~/.vim/install.sh --with-pyright
 #   更新:          ~/.vim/install.sh --update
 #   只检查:        ~/.vim/install.sh --verify
 #
@@ -23,14 +25,22 @@ DO_COC=0
 DO_TMUX=0
 DO_LINK=1
 DO_VERIFY=1
+DO_PYREFLY=0
+DO_PYRIGHT=0
 UPDATE=0
 DRY=0
+
+# Python 语言服务器版本固定 (要换版本改这里, 或临时: PYREFLY_VERSION=1.4.0 ./install.sh --with-pyrefly)
+PYREFLY_VERSION="${PYREFLY_VERSION:-1.3.2}"
 
 usage() {
   cat <<'EOF'
 用法: install.sh [选项]
 
   --with-coc      额外安装 coc.nvim 的语言服务器扩展 (需要 node/npm)
+  --with-pyrefly  用 pyrefly (Rust) 当 Python 语言服务器, 并关掉 pyright
+                  (2G 小内存机器推荐: pyright 是 Node 实现, 实测会把机器压死)
+  --with-pyright  回退到 pyright (coc-pyright)
   --with-tmux     若存在 tmux, 写入 ~/.tmux.conf 让 OSC52 剪贴板能透传
   --update        已存在的插件也执行 fetch + 切回 pinned commit
   --verify        只做加载检查 (不改动任何东西)
@@ -49,6 +59,8 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-coc)   DO_COC=1 ;;
+    --with-pyrefly) DO_PYREFLY=1 ;;
+    --with-pyright) DO_PYRIGHT=1 ;;
     --with-tmux)  DO_TMUX=1 ;;
     --update)     UPDATE=1 ;;
     --verify)     DO_PLUGINS=0; DO_COC=0; DO_LINK=0; DO_VERIFY=1 ;;
@@ -199,6 +211,112 @@ else
   say "  未指定 --with-coc, 跳过 (需要时执行: $ROOT/install.sh --with-coc)"
 fi
 
+# ------------------------------------------- 3.5 Python 语言服务器 (pyrefly / pyright)
+step "3.5 Python 语言服务器 (pyrefly / pyright)"
+COCFG="$ROOT/coc/coc-settings.json"
+PYREFLY_BIN="${PYREFLY_BIN:-$HOME/.local/bin/pyrefly}"
+
+# 为什么要有这一步:
+#   pyright 是 TypeScript/Node 实现, coc-pyright 启动它时硬编码了
+#   --max-old-space-size=3072 (见扩展 lib/index.js 里的 defaultHeapSize)。
+#   在 1.6G 可用内存的机器上, 这个"允许涨到 3G 才回收"的堆上限会把整机拖到假死。
+#   pyrefly 是 Rust 单二进制: 实测同样打开一个 7 文件的 NoneBot 项目,
+#   pyrefly 稳定在 ~126MB, 几秒内就能出补全。
+#   coc-settings.json 是机器本地文件(已被 .gitignore), 所以由脚本生成, 不入库。
+coc_settings_py() {   # $1 = apply | revert
+  COCFG="$COCFG" PYREFLY_BIN="$PYREFLY_BIN" MODE="$1" python3 - <<'PYEOF'
+import json, os
+path = os.environ['COCFG']
+mode = os.environ['MODE']
+cfg = {}
+if os.path.exists(path):
+    try:
+        with open(path, encoding='utf-8') as fh:
+            cfg = json.load(fh)
+    except Exception as exc:
+        print('  !! 现有 coc-settings.json 解析失败 (%s), 备份后重建' % exc)
+        os.replace(path, path + '.bak')
+        cfg = {}
+cfg.setdefault('inlayHint.display', False)
+if mode == 'apply':
+    cfg['pyright.enable'] = False
+    ls = cfg.setdefault('languageserver', {})
+    entry = ls.get('pyrefly') or {}
+    entry['command'] = os.environ['PYREFLY_BIN']
+    entry['args'] = ['lsp', '--threads', '1', '--workspace-indexing-limit', '500']
+    entry['filetypes'] = ['python']
+    entry['rootPatterns'] = ['pyproject.toml', 'setup.py', 'setup.cfg', '.git']
+    # 只有显式给了 PYREFLY_PYTHON 才写 pythonPath, 否则保留已有的(例如服务器上的项目 venv)
+    py = os.environ.get('PYREFLY_PYTHON', '')
+    if py:
+        entry.setdefault('initializationOptions', {})['pythonPath'] = py
+    ls['pyrefly'] = entry
+    print('  coc-settings.json 已更新: languageserver.pyrefly + pyright.enable=false')
+else:
+    cfg['pyright.enable'] = True
+    ls = cfg.get('languageserver', {})
+    if 'pyrefly' in ls:
+        ls.pop('pyrefly')
+        print('  coc-settings.json 已更新: 移除 pyrefly, pyright.enable=true')
+    else:
+        print('  coc-settings.json 已更新: pyright.enable=true')
+    if not ls:
+        cfg.pop('languageserver', None)
+with open(path, 'w', encoding='utf-8') as fh:
+    json.dump(cfg, fh, indent=4, ensure_ascii=False)
+    fh.write('\n')
+PYEOF
+}
+
+if [ "$DO_PYREFLY" = 1 ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    say "  !! 没有 python3, 无法改写 coc-settings.json"
+  else
+    if [ -x "$PYREFLY_BIN" ]; then
+      say "  pyrefly 已存在: $("$PYREFLY_BIN" --version 2>/dev/null || echo '版本未知')  ($PYREFLY_BIN)"
+      say "  (想升级或换版本: pipx install --force pyrefly==$PYREFLY_VERSION)"
+    elif [ "$DRY" = 1 ]; then
+      say "  [dry-run] pipx install --force pyrefly==$PYREFLY_VERSION"
+    elif command -v pipx >/dev/null 2>&1; then
+      if pipx install --force "pyrefly==$PYREFLY_VERSION" >/dev/null 2>&1; then
+        say "  pyrefly $PYREFLY_VERSION 已安装: $PYREFLY_BIN"
+      else
+        say "  !! pipx 安装失败 (PyPI 网络? 也可: pip3 install --user pyrefly==$PYREFLY_VERSION)"
+      fi
+    else
+      say "  !! 没有 pipx; 先 sudo apt install pipx, 或 pip3 install --user pyrefly==$PYREFLY_VERSION"
+      say "     已装好的话可以把路径给脚本: PYREFLY_BIN=/path/to/pyrefly $ROOT/install.sh --with-pyrefly"
+    fi
+    if [ "$DRY" = 1 ]; then
+      say "  [dry-run] 改写 $COCFG: languageserver.pyrefly + pyright.enable=false"
+    else
+      run mkdir -p "$(dirname "$COCFG")"
+      if ! coc_settings_py apply; then
+        say "  !! 改写 coc-settings.json 失败"
+      fi
+    fi
+    say "  提示: 项目里若有独立 venv, 可用 pyrefly.toml 指定解释器"
+    say "        (python-interpreter-path = \".venv/bin/python\"), 或设 PYREFLY_PYTHON 一次性写入"
+  fi
+elif [ "$DO_PYRIGHT" = 1 ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    say "  !! 没有 python3, 无法改写 coc-settings.json"
+  elif [ "$DRY" = 1 ]; then
+    say "  [dry-run] 改写 $COCFG: 移除 pyrefly, pyright.enable=true"
+  else
+    run mkdir -p "$(dirname "$COCFG")"
+    if ! coc_settings_py revert; then
+      say "  !! 改写 coc-settings.json 失败"
+    fi
+    if [ ! -d "$ROOT/coc/extensions/node_modules/coc-pyright" ]; then
+      say "  注意: coc-pyright 扩展不在, 回退还需执行 $ROOT/install.sh --with-coc"
+    fi
+    say "  注意: pyright 启动时堆上限是硬编码的 3072MB, 内存小的机器请谨慎回退"
+  fi
+else
+  say "  未指定, 保持现状 (--with-pyrefly 换 pyrefly, --with-pyright 回退)"
+fi
+
 # ---------------------------------------------------------------- 4. tmux
 step "4. tmux 剪贴板透传 (可选)"
 if [ "$DO_TMUX" = 1 ]; then
@@ -297,6 +415,23 @@ if exists(':CocInstall')
   call add(s:out, 'coc.nvim 已加载, build/index.js ' . (filereadable($MYVIM_ROOT . '/my_plugins/coc.nvim/build/index.js') ? '存在' : '缺失(无法启动!)'))
 else
   call add(s:out, 'coc.nvim 未加载')
+endif
+if filereadable($MYVIM_ROOT . '/coc/coc-settings.json')
+  try
+    let s:cfg = json_decode(join(readfile($MYVIM_ROOT . '/coc/coc-settings.json'), "\n"))
+    let s:lsps = []
+    if !empty(get(get(s:cfg, 'languageserver', {}), 'pyrefly', {}))
+      call add(s:lsps, 'pyrefly')
+    endif
+    if get(s:cfg, 'pyright.enable', 1)
+      call add(s:lsps, 'pyright')
+    endif
+    call add(s:out, 'Python LSP: ' . (empty(s:lsps) ? '(未配置)' : join(s:lsps, ' + ')))
+  catch
+    call add(s:out, 'Python LSP: (coc-settings.json 解析失败)')
+  endtry
+else
+  call add(s:out, 'Python LSP: (无 coc-settings.json)')
 endif
 call add(s:out, '生效: colorscheme=' . get(g:, 'colors_name', '?') . ' number=' . &number . ' shiftwidth=' . &shiftwidth . ' leader=[' . get(g:, 'mapleader', '?') . ']')
 call add(s:out, '映射: 11=' . maparg('11', 'n') . ' | 22=' . maparg('22', 'n') . ' | Esc保存=' . (!empty(maparg('<Esc>', 'n')) && empty(maparg('<Esc><Esc>', 'n')) ? 'ok(连击判定)' : '缺失!') . ' | Space_y=' . (empty(maparg('<Space>y', 'n')) ? '(未注册)' : 'ok(OSC52)'))

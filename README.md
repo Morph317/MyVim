@@ -179,6 +179,52 @@ Vim 9.2 的 `t_SI` / `t_SR` / `t_EI` 全是空字符串,于是终端一直用它
 > 若仍无补全,用 `:CocInfo` / `:CocList extensions` 看扩展是否加载;另外 pyright 首次
 > 索引要几十秒(2C2G 服务器实测约 26 秒),属正常现象。
 
+### Python 语言服务器:小内存机器换 pyrefly
+
+```bash
+~/.vim/install.sh --with-coc --with-pyrefly   # 换成 pyrefly (Rust)
+~/.vim/install.sh --with-pyright              # 回退到 pyright
+```
+
+**为什么默认建议 pyrefly**:pyright 是 TypeScript/Node 实现,而 `coc-pyright` 启动它时
+把 V8 堆上限**硬编码**成 3072 MB(`lib/index.js` 里的 `defaultHeapSize = 3072`,没有任何
+设置项能改)。在 1.6 GB 可用内存的机器上,这个"允许涨到 3 GB 才积极回收"的上限会把整机
+拖到假死 —— 实测把服务器压到无响应、只能重启。
+
+pyrefly 是 Rust 单二进制,用 `pipx` 装在独立环境里(`~/.local/bin/pyrefly`,约 33 MB),
+通过 coc 内建的 `languageserver` 配置接入(`coc-settings.json` 是机器本地文件,已被
+`.gitignore`,由安装脚本生成)。同一个 7 文件的 NoneBot 项目实测:
+
+| | pyright | pyrefly |
+|---|---|---|
+| 进程常驻内存 | Node 堆上限 3072 MB,实际把 1.6 G 机器压死 | **稳定约 126 MB** |
+| 出补全速度 | 冷启动约 26 秒 | 打开文件后几秒内 |
+| 依赖 | Node + npm 扩展(约 122 MB) | 单个 Rust 二进制(约 33 MB) |
+
+接入参数(脚本写入 `coc-settings.json`):
+
+```json
+"languageserver": {
+  "pyrefly": {
+    "command": "~/.local/bin/pyrefly",
+    "args": ["lsp", "--threads", "1", "--workspace-indexing-limit", "500"],
+    "filetypes": ["python"],
+    "rootPatterns": ["pyproject.toml", "setup.py", "setup.cfg", ".git"]
+  }
+},
+"pyright.enable": false
+```
+
+* `--threads 1`:2 核机器上把并行分析的峰值内存/CPU 让给 bot 本体。
+* `--workspace-indexing-limit 500`:限制工作区索引文件数(项目只有 7 个 py 文件,够用)。
+* 还想更省:`args` 里加 `"--indexing-mode", "none"`(代价:跨文件"查找引用"失效)。
+* **项目 venv**:pyrefly 默认用系统解释器,拿不到项目依赖。两种办法 ——
+  设 `PYREFLY_PYTHON=/path/to/.venv/bin/python` 后重跑 `--with-pyrefly`(脚本会写进
+  `initializationOptions.pythonPath`),或在项目根放 `pyrefly.toml`:
+  `python-interpreter-path = ".venv/bin/python"`(推荐,按项目生效)。
+* 想回收磁盘:`rm -rf <仓库>/coc/extensions/node_modules/coc-pyright`(约 122 MB),
+  回退时用 `--with-coc` 重装。
+
 ## 快捷键速查
 
 完整清单在 `my_configs.vim` 末尾。常用:
